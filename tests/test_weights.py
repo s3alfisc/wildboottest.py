@@ -4,7 +4,6 @@ from wildboottest.wildboottest import WildboottestCL
 import numpy as np
 import pandas as pd
 
-np.random.seed(89756)
 
 ts = list(wild_draw_fun_dict.keys())
 full_enum = [True, False]
@@ -13,6 +12,7 @@ boot_iter = list(range(0,1000,400))
 
 @pytest.fixture
 def data():
+    np.random.seed(12315)
     N = 100
     k = 2
     G= 20
@@ -46,9 +46,11 @@ def test_different_weights(data):
     X, y, cluster, bootcluster, R, B = data
     
     results_dict = {}
+    
+    rng = np.random.default_rng(seed=0)
 
     for w in ts:
-        boot = WildboottestCL(X = X, Y = y, cluster = cluster, bootcluster = bootcluster, R = R, B = 99999, seed = 12341)
+        boot = WildboottestCL(X = X, Y = y, cluster = cluster, bootcluster = bootcluster, R = R, B = 99999, seed = rng)
         boot.get_scores(bootstrap_type = "11", impose_null = True)
         boot.get_weights(weights_type = w)
         boot.get_numer()
@@ -60,7 +62,9 @@ def test_different_weights(data):
         results_dict[w] = boot.pvalue
         
     results_series = pd.Series(results_dict)
+    print(results_series)
 
     mapd = (results_series - results_series.mean()).abs().mean()  / results_series.mean()    
+    print(mapd)
         
     assert  mapd <= .1# make sure mean absolute percentage deviation is less than 10% (ad hoc)

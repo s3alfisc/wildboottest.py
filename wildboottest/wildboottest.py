@@ -5,6 +5,13 @@ from numba import jit, njit, prange
 from wildboottest.weights import draw_weights
 import warnings
 from typing import Union, Tuple, Callable
+from numpy.random import Generator
+from statsmodels.regression.linear_model import OLS
+
+
+_allowed_models = (
+  OLS,
+)
 
 class WildDrawFunctionException(Exception):
     pass
@@ -55,7 +62,7 @@ class WildboottestHC:
           R : Union[np.ndarray, pd.DataFrame],
           r: Union[np.ndarray, float],
           B: int,
-          seed:  Union[int, None] = None) -> None:
+          seed:  Union[int, Generator, None] = None) -> None:
 
         """Initializes the Heteroskedastic Wild Bootstrap Class
 
@@ -64,7 +71,9 @@ class WildboottestHC:
           Y (Union[np.ndarray, pd.DataFrame, pd.Series]): Endogenous variable array or dataframe
           R (Union[np.ndarray, pd.DataFrame]): Constraint matrix for running bootstrap
           B (int): bootstrap iterations
-          seed (Union[int, None], optional): Random seed for random weight types. Defaults to None.
+          seed (Union[int, Generator, None], optional): Random seed for random weight types. 
+          If an integer, will be used as a seed in a numpy default random generator, or a numpy random generator 
+          can also be specified and used. Defaults to None.
 
         Raises:
           TypeError: Raise if input arrays are lists
@@ -85,10 +94,12 @@ class WildboottestHC:
         else:
           self.Y = Y
 
-        if seed is None:
-          seed = np.random.randint(low = 1, high =  (2**32 - 1), size = 1, dtype=np.int64)
-
-        self.rng = np.random.default_rng(seed = seed)
+        if isinstance(seed, int):
+          self.rng = np.random.default_rng(seed=seed)
+        elif isinstance(seed, Generator):
+          self.rng = seed
+        else:
+          self.rng = np.random.default_rng()
 
         self.N = X.shape[0]
         self.k = X.shape[1]
@@ -274,7 +285,7 @@ class WildboottestCL:
                R : Union[np.ndarray, pd.DataFrame],
                B: int,
                bootcluster: Union[np.ndarray, pd.DataFrame, pd.Series, None] = None,
-               seed:  Union[int, None] = None,
+               seed:  Union[int, Generator, None] = None,
                parallel: bool = True) -> None:
     """Initializes the Wild Cluster Bootstrap Class
 
@@ -285,7 +296,9 @@ class WildboottestCL:
         R (Union[np.ndarray, pd.DataFrame]): Constraint matrix for running bootstrap
         B (int): bootstrap iterations
         bootcluster (Union[np.ndarray, pd.DataFrame, pd.Series, None], optional): Sub-cluster array. Defaults to None.
-        seed (Union[int, None], optional): Random seed for random weight types. Defaults to None.
+        seed (Union[int, Generator, None], optional): Random seed for random weight types. 
+          If an integer, will be used as a seed in a numpy default random generator, or a numpy random generator 
+          can also be specified and used. Defaults to None.        
         parallel (bool, optional): Whether to run the bootstrap in parallel. Defaults to True.
     Raises:
         TypeError: Raise if input arrays are lists
@@ -326,11 +339,13 @@ class WildboottestCL:
       self.bootclustid = np.unique(bootcluster)
       self.bootcluster = bootcluster
 
-    if seed is None:
-      seed = np.random.randint(low = 1, high =  (2**32 - 1), size = 1, dtype=np.int64)
-
-    self.rng = np.random.default_rng(seed = seed)
-
+    if isinstance(seed, int):
+      self.rng = np.random.default_rng(seed=seed)
+    elif isinstance(seed, Generator):
+      self.rng = seed
+    else:
+      self.rng = np.random.default_rng()
+      
     self.N_G_bootcluster = len(self.bootclustid)
     self.G  = len(self.clustid)
 
@@ -640,14 +655,14 @@ class WildboottestCL:
       self.pvalue = np.mean(self.t_stat > self.t_boot)
 
 
-def wildboottest(model : 'OLS',
+def wildboottest(model : OLS,
                  B:int,
                  cluster : Union[np.ndarray, pd.Series, pd.DataFrame, None] = None,
                  param : Union[str, None] = None,
                  weights_type: str = 'rademacher',
                  impose_null: bool = True,
                  bootstrap_type: str = '11',
-                 seed: Union[str, None] = None,
+                 seed: Union[int, Generator, None] = None,
                  adj: bool = True,
                  cluster_adj: bool = True,
                  parallel: bool = True,
@@ -666,7 +681,9 @@ def wildboottest(model : 'OLS',
                            Defaults to True.
       bootstrap_type (str, optional):A string of length one. Allows to choose the bootstrap type
                           to be run. Either '11', '31', '13' or '33'. '11' by default. Defaults to '11'.
-      seed (Union[str, None], optional): Option to provide a random seed. Defaults to None.
+      seed (Union[int, Generator, None], optional): Random seed for random weight types. 
+        If an integer, will be used as a seed in a numpy default random generator, or a numpy random generator 
+        can also be specified and used. Defaults to None.      
       adj (bool, optional): Whether to adjust for small sample. Defaults to True.
       cluster_adj (bool, optional): Whether to do a cluster-robust small sample correction. Defaults to True.
       parallel (bool, optional): Whether to run the bootstrap in parallel. Defaults to True.
@@ -702,6 +719,9 @@ def wildboottest(model : 'OLS',
       >>> wildboottest(model, param = "X1", cluster = cluster, B = 9999)
       >>> wildboottest(model, cluster = cluster, B = 9999)
   """
+  
+  if not isinstance(model, _allowed_models):
+    raise NotImplementedError(f"Only allow models of type {' ,'.join([str(i) for i in _allowed_models])}")
 
   # does model.exog already exclude missing values?
   X = model.exog

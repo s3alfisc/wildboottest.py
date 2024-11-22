@@ -44,3 +44,16 @@ def test_results_from_same_seed(data):
         np.random.seed(123)
         b2 = wildboottest(model, param = "X1", cluster = x, B= 999)
         pd.testing.assert_frame_equal(a2,b2)
+
+def test_seeds_and_rng(data):
+    model = sm.ols(formula='Y ~ X1 + X2', data=data)    
+
+    cluster_list = [data.cluster, None]
+    
+    for x in cluster_list: 
+
+        # specifying seed and rng with that seed -> same results
+        a = wildboottest(model, param = "X1", cluster = x, B= 999, seed=876587)
+        rng = np.random.default_rng(seed=876587)
+        b = wildboottest(model, param = "X1", cluster = x, B= 999, seed=rng)
+        pd.testing.assert_frame_equal(a,b)
